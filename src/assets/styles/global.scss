@@ -1,0 +1,103 @@
+/* Global Styles */
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c0c4cc;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #909399;
+}
+
+/* Dark Mode */
+html.dark {
+  --el-bg-color: #1d1e1f;
+  --el-bg-color-overlay: #2d2d2f;
+  --el-text-color-primary: #e5eaf3;
+  --el-text-color-regular: #cfd3dc;
+  --el-border-color: #4c4d4f;
+  --el-fill-color-blank: #2d2d2f;
+
+  body {
+    background: #141414;
+    color: #e5eaf3;
+  }
+
+  .el-card {
+    background: #1d1e1f;
+    border-color: #4c4d4f;
+  }
+
+  .el-table {
+    --el-table-bg-color: #1d1e1f;
+    --el-table-tr-bg-color: #1d1e1f;
+    --el-table-header-bg-color: #262727;
+    --el-table-row-hover-bg-color: #262727;
+  }
+
+  .el-dialog {
+    background: #1d1e1f;
+  }
+
+  .el-input__wrapper {
+    background: #2d2d2f;
+  }
+
+  .el-textarea__inner {
+    background: #2d2d2f;
+  }
+
+  .header {
+    background: #1d1e1f !important;
+    border-color: #4c4d4f !important;
+  }
+
+  .toolbar {
+    background: #1d1e1f !important;
+  }
+
+  .panel {
+    background: #1d1e1f !important;
+  }
+
+  .panel-header {
+    border-color: #4c4d4f !important;
+  }
+
+  .test-panel {
+    border-color: #4c4d4f !important;
+  }
+
+  .panel-title {
+    background: #262727 !important;
+    border-color: #4c4d4f !important;
+  }
+
+  .mapping-node {
+    border-color: #4c4d4f !important;
+  }
+}
+
+/* Utility Classes */
+.page-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
