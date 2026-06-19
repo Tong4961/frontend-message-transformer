@@ -492,12 +492,19 @@ onMounted(async () => {
 
   // Load all templates
   allTemplates.value = (await getTemplateList() as any) || []
-  sourceTemplates.value = allTemplates.value.filter(
-    (t: any) => t.format === converter.value?.sourceFormat
-  )
-  targetTemplates.value = allTemplates.value.filter(
-    (t: any) => t.format === converter.value?.targetFormat
-  )
+  // HL7_V3 is also XML, so match both XML and HL7_V3 when source/target format is XML
+  sourceTemplates.value = allTemplates.value.filter((t: any) => {
+    if (converter.value?.sourceFormat === 'XML') {
+      return t.format === 'XML' || t.format === 'HL7_V3'
+    }
+    return t.format === converter.value?.sourceFormat
+  })
+  targetTemplates.value = allTemplates.value.filter((t: any) => {
+    if (converter.value?.targetFormat === 'XML') {
+      return t.format === 'XML' || t.format === 'HL7_V3'
+    }
+    return t.format === converter.value?.targetFormat
+  })
 
   // Restore saved template selections
   if (converter.value?.sourceTemplateId) {

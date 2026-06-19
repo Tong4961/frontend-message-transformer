@@ -45,6 +45,12 @@ const router = createRouter({
           meta: { title: '模板管理' }
         },
         {
+          path: 'template/:id/edit',
+          name: 'TemplateEdit',
+          component: () => import('@/views/template/TemplateEdit.vue'),
+          meta: { title: '编辑模板' }
+        },
+        {
           path: 'audit',
           name: 'AuditLog',
           component: () => import('@/views/audit/AuditLog.vue'),

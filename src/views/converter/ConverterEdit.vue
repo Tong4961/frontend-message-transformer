@@ -17,14 +17,16 @@
         <el-form-item label="名称" required>
           <el-input v-model="formData.name" />
         </el-form-item>
-        <el-form-item label="源格式" required>
+        <el-form-item label="源类型" required>
           <el-select v-model="formData.sourceFormat">
+            <el-option label="HL7 V3" value="HL7_V3" />
             <el-option label="XML" value="XML" />
             <el-option label="JSON" value="JSON" />
           </el-select>
         </el-form-item>
-        <el-form-item label="目标格式" required>
+        <el-form-item label="目标类型" required>
           <el-select v-model="formData.targetFormat">
+            <el-option label="HL7 V3" value="HL7_V3" />
             <el-option label="XML" value="XML" />
             <el-option label="JSON" value="JSON" />
           </el-select>
@@ -81,10 +83,20 @@ const formData = reactive({
 })
 
 const sourceTemplates = computed(() =>
-  allTemplates.value.filter((t: any) => t.format === formData.sourceFormat)
+  allTemplates.value.filter((t: any) => {
+    if (formData.sourceFormat === 'XML') {
+      return t.format === 'XML' || t.format === 'HL7_V3'
+    }
+    return t.format === formData.sourceFormat
+  })
 )
 const targetTemplates = computed(() =>
-  allTemplates.value.filter((t: any) => t.format === formData.targetFormat)
+  allTemplates.value.filter((t: any) => {
+    if (formData.targetFormat === 'XML') {
+      return t.format === 'XML' || t.format === 'HL7_V3'
+    }
+    return t.format === formData.targetFormat
+  })
 )
 
 onMounted(async () => {

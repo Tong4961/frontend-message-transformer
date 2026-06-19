@@ -26,11 +26,11 @@
       <el-table :data="tableData" v-loading="loading" stripe>
         <el-table-column prop="code" label="编码" width="180" />
         <el-table-column prop="name" label="名称" min-width="150" />
-        <el-table-column label="格式" width="140">
+        <el-table-column label="类型" width="180">
           <template #default="{ row }">
-            <el-tag size="small">{{ row.sourceFormat }}</el-tag>
+            <el-tag :type="formatTagType(row.sourceFormat)" size="small">{{ formatLabel(row.sourceFormat) }}</el-tag>
             <el-icon style="margin: 0 4px"><Right /></el-icon>
-            <el-tag size="small" type="success">{{ row.targetFormat }}</el-tag>
+            <el-tag :type="formatTagType(row.targetFormat)" size="small">{{ formatLabel(row.targetFormat) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="version" label="版本" width="80" align="center" />
@@ -74,14 +74,16 @@
         <el-form-item label="名称" required>
           <el-input v-model="formData.name" />
         </el-form-item>
-        <el-form-item label="源格式" required>
+        <el-form-item label="源类型" required>
           <el-select v-model="formData.sourceFormat">
+            <el-option label="HL7 V3" value="HL7_V3" />
             <el-option label="XML" value="XML" />
             <el-option label="JSON" value="JSON" />
           </el-select>
         </el-form-item>
-        <el-form-item label="目标格式" required>
+        <el-form-item label="目标类型" required>
           <el-select v-model="formData.targetFormat">
+            <el-option label="HL7 V3" value="HL7_V3" />
             <el-option label="XML" value="XML" />
             <el-option label="JSON" value="JSON" />
           </el-select>
@@ -155,6 +157,14 @@ const formData = reactive({
 
 const statusType = (s: string) => s === 'PUBLISHED' ? 'success' : s === 'DISABLED' ? 'danger' : 'info'
 const statusLabel = (s: string) => ({ DRAFT: '草稿', PUBLISHED: '已发布', DISABLED: '已禁用' }[s] || s)
+
+const formatLabel = (f: string) => f === 'HL7_V3' ? 'HL7 V3' : f
+const formatTagType = (f: string) => {
+  if (f === 'HL7_V3') return 'danger'
+  if (f === 'XML') return 'success'
+  if (f === 'JSON') return 'primary'
+  return 'info'
+}
 
 const loadData = async () => {
   loading.value = true
