@@ -140,6 +140,7 @@ const toggleDark = (val: boolean) => {
   background: #f0f2f5;
   padding: 16px;
   overflow-y: auto;
+  height: calc(100vh - 56px);
 }
 
 .fade-enter-active,

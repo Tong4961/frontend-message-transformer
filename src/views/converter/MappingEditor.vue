@@ -539,9 +539,9 @@ onMounted(async () => {
   }
 })
 
-const loadSourceFromTemplate = async (templateId: number) => {
+const loadSourceFromTemplate = async (templateId: string | number) => {
   try {
-    const tpl: any = await getTemplateById(templateId)
+    const tpl: any = await getTemplateById(String(templateId))
     if (tpl?.schemaData) {
       sourceTree.value = await parseStructure({
         data: tpl.schemaData,
@@ -551,9 +551,9 @@ const loadSourceFromTemplate = async (templateId: number) => {
   } catch (e) { /* ignore */ }
 }
 
-const loadTargetFromTemplate = async (templateId: number) => {
+const loadTargetFromTemplate = async (templateId: string | number) => {
   try {
-    const tpl: any = await getTemplateById(templateId)
+    const tpl: any = await getTemplateById(String(templateId))
     if (tpl?.schemaData) {
       targetTree.value = await parseStructure({
         data: tpl.schemaData,

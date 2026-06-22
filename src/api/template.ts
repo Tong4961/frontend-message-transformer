@@ -12,7 +12,7 @@ export function getTemplateStats() {
   return request.get('/template/stats')
 }
 
-export function getTemplateById(id: number) {
+export function getTemplateById(id: string) {
   return request.get(`/template/${id}`)
 }
 
@@ -24,14 +24,23 @@ export function updateTemplate(data: any) {
   return request.put('/template', data)
 }
 
-export function deleteTemplate(id: number) {
+export function deleteTemplate(id: string) {
   return request.delete(`/template/${id}`)
 }
 
-export function exportTemplate(id: number) {
+export function exportTemplate(id: string) {
   return request.get(`/template/${id}/export`)
 }
 
 export function importTemplate(data: any) {
   return request.post('/template/import', data)
+}
+
+// 检索条件配置
+export function getSearchFields(templateId: string) {
+  return request.get('/template-search-field/list', { params: { templateId } })
+}
+
+export function saveSearchFields(templateId: string, fields: any[]) {
+  return request.post('/template-search-field/save', { templateId, fields })
 }

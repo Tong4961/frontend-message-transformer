@@ -54,15 +54,21 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination
-        v-model:current-page="pagination.page"
-        v-model:page-size="pagination.size"
-        :total="pagination.total"
-        :page-sizes="[10, 20, 50]"
-        layout="total, sizes, prev, pager, next"
-        @change="loadData"
-        style="margin-top: 12px; justify-content: flex-end"
-      />
+
+      <!-- Pagination -->
+      <div class="pagination-wrapper">
+        <span class="pagination-info">共 {{ pagination.total }} 条</span>
+        <el-pagination
+          :current-page="pagination.page"
+          :page-size="pagination.size"
+          :page-sizes="[10, 20, 50]"
+          :total="pagination.total"
+          layout="sizes, prev, pager, next, jumper"
+          background
+          @current-change="(val: number) => { pagination.page = val; loadData() }"
+          @size-change="(val: number) => { pagination.size = val; pagination.page = 1; loadData() }"
+        />
+      </div>
     </el-card>
 
     <!-- Create/Edit Dialog -->
@@ -170,8 +176,8 @@ const loadData = async () => {
   loading.value = true
   try {
     const res: any = await getConverterPage({ page: pagination.page, size: pagination.size, ...searchForm })
-    tableData.value = res.records
-    pagination.total = res.total
+    tableData.value = res.records || []
+    pagination.total = Number(res.total) || 0
   } finally {
     loading.value = false
   }
@@ -275,5 +281,17 @@ onMounted(loadData)
 }
 .search-card :deep(.el-form-item) {
   margin-bottom: 0;
+}
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0 0 0;
+  margin-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+.pagination-info {
+  font-size: 13px;
+  color: #606266;
 }
 </style>

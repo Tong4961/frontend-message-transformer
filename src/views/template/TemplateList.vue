@@ -90,16 +90,21 @@
           </template>
         </el-table-column>
       </el-table>
-      <el-pagination
-        v-model:current-page="pagination.page"
-        v-model:page-size="pagination.size"
-        :total="pagination.total"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next"
-        @current-change="loadData"
-        @size-change="loadData"
-        style="margin-top: 12px; justify-content: flex-end"
-      />
+
+      <!-- Pagination -->
+      <div class="pagination-wrapper">
+        <span class="pagination-info">共 {{ pagination.total }} 条</span>
+        <el-pagination
+          :current-page="pagination.page"
+          :page-size="pagination.size"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="pagination.total"
+          layout="sizes, prev, pager, next, jumper"
+          background
+          @current-change="(val: number) => { pagination.page = val; loadData() }"
+          @size-change="(val: number) => { pagination.size = val; pagination.page = 1; loadData() }"
+        />
+      </div>
     </el-card>
 
     <!-- Create/Edit Dialog -->
@@ -246,6 +251,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Upload, Download, Document, Folder, List, Refresh } from '@element-plus/icons-vue'
 import { getTemplateList, getTemplatePage, getTemplateStats, getTemplateById, createTemplate, updateTemplate, deleteTemplate, exportTemplate, importTemplate } from '@/api/template'
 import { parseStructure } from '@/api/transform'
+import request from '@/api/request'
 
 const router = useRouter()
 
@@ -305,7 +311,7 @@ const loadData = async () => {
       keyword: searchKey.value || undefined
     })
     dataList.value = res.records || []
-    pagination.total = res.total || 0
+    pagination.total = Number(res.total) || 0
     updateStats()
   } finally {
     loading.value = false
@@ -449,16 +455,12 @@ const editTemplate = (row: any) => {
 
 // View structure
 const viewStructure = async (row: any) => {
-  if (!row.sampleData) {
-    ElMessage.warning('该模板没有示例数据')
-    return
-  }
   try {
-    const format = row.format === 'HL7_V3' ? 'XML' : row.format
-    structureTree.value = await parseStructure({ data: row.sampleData, format }) as any || []
+    const data = await request.get(`/template/${row.id}/structure`)
+    structureTree.value = data as any || []
     structureVisible.value = true
   } catch (e: any) {
-    ElMessage.error('解析结构失败: ' + e.message)
+    ElMessage.error('获取结构失败: ' + e.message)
   }
 }
 
@@ -620,6 +622,7 @@ onMounted(loadData)
   padding: 20px;
   background: #f5f7fa;
   min-height: calc(100vh - 80px);
+  overflow: visible;
 }
 
 .page-header {
@@ -713,6 +716,19 @@ onMounted(loadData)
 /* Table Card */
 .table-card {
   border-radius: 8px;
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 0 0 0;
+  margin-top: 16px;
+  border-top: 1px solid #ebeef5;
+}
+.pagination-info {
+  font-size: 13px;
+  color: #606266;
 }
 
 .root-text {
