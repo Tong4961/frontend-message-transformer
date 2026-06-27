@@ -1,10 +1,10 @@
 import request from './request'
 
-export function getRulesByConverter(converterId: number) {
+export function getRulesByConverter(converterId: string) {
   return request.get(`/mapping-rule/list/${converterId}`)
 }
 
-export function saveRules(converterId: number, rules: any[]) {
+export function saveRules(converterId: string, rules: any[]) {
   return request.post(`/mapping-rule/save/${converterId}`, rules)
 }
 
@@ -16,6 +16,6 @@ export function updateRule(data: any) {
   return request.put('/mapping-rule', data)
 }
 
-export function deleteRule(id: number) {
+export function deleteRule(id: string) {
   return request.delete(`/mapping-rule/${id}`)
 }

@@ -15,7 +15,7 @@
         <el-button type="primary" @click="handleSearch">
           <el-icon><Search /></el-icon>搜索
         </el-button>
-        <el-button type="primary" @click="showDialog()">
+        <el-button type="primary" @click="router.push('/template/create')">
           <el-icon><Plus /></el-icon>新建模板
         </el-button>
       </div>
@@ -107,75 +107,6 @@
       </div>
     </el-card>
 
-    <!-- Create/Edit Dialog -->
-    <el-dialog v-model="dialogVisible" :title="isEdit ? '编辑模板' : '新建模板'" width="700px">
-      <el-tabs v-model="dialogTab">
-        <!-- Tab 1: Basic Info -->
-        <el-tab-pane label="基础信息" name="basic">
-          <el-form :model="formData" label-width="100px">
-            <el-form-item label="模板编码" required>
-              <el-input v-model="formData.code" :disabled="isEdit" placeholder="请输入模板编码" />
-            </el-form-item>
-            <el-form-item label="模板名称" required>
-              <el-input v-model="formData.name" placeholder="请输入模板名称" />
-            </el-form-item>
-            <el-form-item label="模板类型" required>
-              <el-radio-group v-model="formData.format" :disabled="isEdit">
-                <el-radio-button label="HL7_V3">HL7 V3</el-radio-button>
-                <el-radio-button label="XML">XML</el-radio-button>
-                <el-radio-button label="JSON">JSON</el-radio-button>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="描述">
-              <el-input v-model="formData.description" type="textarea" :rows="3" placeholder="请输入描述" />
-            </el-form-item>
-            <el-form-item label="标签">
-              <el-input v-model="formData.tags" placeholder="多个标签用逗号分隔" />
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
-
-        <!-- Tab 2: Sample Data -->
-        <el-tab-pane label="示例数据" name="sample">
-          <el-form :model="formData" label-width="100px">
-            <el-form-item label="结构定义">
-              <el-input v-model="formData.schemaData" type="textarea" :rows="8" placeholder="粘贴 XML 或 JSON 结构定义（XSD/Schema）" />
-            </el-form-item>
-            <el-form-item label="示例数据">
-              <el-input v-model="formData.sampleData" type="textarea" :rows="8" placeholder="粘贴 XML 或 JSON 内容" />
-            </el-form-item>
-          </el-form>
-        </el-tab-pane>
-
-        <!-- Tab 3: Data Structure -->
-        <el-tab-pane label="数据结构" name="structure">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <span>数据结构</span>
-            <el-button size="small" @click="refreshDialogStructure" :loading="parsingStructure">
-              <el-icon><Refresh /></el-icon>刷新
-            </el-button>
-          </div>
-          <div v-if="dialogStructureTree.length > 0" style="height: 400px; overflow-y: auto;">
-            <el-tree :data="dialogStructureTree" node-key="path" default-expand-all :props="{ label: 'name', children: 'children' }">
-              <template #default="{ data }">
-                <div class="tree-node">
-                  <span class="node-name">{{ data.name }}</span>
-                  <span class="node-path">{{ data.path }}</span>
-                  <el-tag v-if="data.dataType" size="small" type="info">{{ data.dataType }}</el-tag>
-                  <el-tag v-if="data.array" size="small" type="warning">数组</el-tag>
-                </div>
-              </template>
-            </el-tree>
-          </div>
-          <el-empty v-else description="暂无数据结构，请先添加示例数据" />
-        </el-tab-pane>
-      </el-tabs>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">确定</el-button>
-      </template>
-    </el-dialog>
-
     <!-- Structure Viewer Dialog -->
     <el-dialog v-model="structureVisible" title="数据结构" width="500px">
       <div style="height: 500px; overflow-y: auto;">
@@ -249,8 +180,7 @@ import { ref, reactive, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Plus, Upload, Download, Document, Folder, List, Refresh } from '@element-plus/icons-vue'
-import { getTemplateList, getTemplatePage, getTemplateStats, getTemplateById, createTemplate, updateTemplate, deleteTemplate, exportTemplate, importTemplate } from '@/api/template'
-import { parseStructure } from '@/api/transform'
+import { getTemplateList, getTemplatePage, getTemplateStats, getTemplateById, deleteTemplate, exportTemplate, importTemplate } from '@/api/template'
 import request from '@/api/request'
 
 const router = useRouter()
@@ -259,13 +189,8 @@ const loading = ref(false)
 const dataList = ref<any[]>([])
 const searchKey = ref('')
 const activeFormat = ref('')
-const dialogVisible = ref(false)
 const structureVisible = ref(false)
-const isEdit = ref(false)
 const structureTree = ref<any[]>([])
-const dialogTab = ref('basic')
-const parsingStructure = ref(false)
-const dialogStructureTree = ref<any[]>([])
 const selectedRows = ref<any[]>([])
 const pagination = reactive({ page: 1, size: 10, total: 0 })
 
@@ -283,17 +208,6 @@ const statsCards = computed(() => [
   { key: 'XML', label: 'XML', value: stats.XML, icon: 'Document', color: '#10b981' },
   { key: 'JSON', label: 'JSON', value: stats.JSON, icon: 'Document', color: '#3b82f6' }
 ])
-
-const formData = reactive({
-  id: null as number | null,
-  code: '',
-  name: '',
-  format: 'XML',
-  description: '',
-  tags: '',
-  schemaData: '',
-  sampleData: ''
-})
 
 // Selection change
 const handleSelectionChange = (rows: any[]) => {
@@ -347,24 +261,6 @@ const parseTags = (tags: string) => {
 }
 
 // Refresh dialog structure
-const refreshDialogStructure = async () => {
-  const data = formData.schemaData || formData.sampleData
-  if (!data) {
-    dialogStructureTree.value = []
-    return
-  }
-  parsingStructure.value = true
-  try {
-    const format = formData.format === 'HL7_V3' ? 'XML' : formData.format
-    dialogStructureTree.value = await parseStructure({ data, format }) as any || []
-  } catch (e: any) {
-    ElMessage.error('解析结构失败: ' + e.message)
-    dialogStructureTree.value = []
-  } finally {
-    parsingStructure.value = false
-  }
-}
-
 // Format helpers
 const getFormatTagType = (format: string) => {
   if (format === 'HL7_V3') return 'danger'
@@ -395,59 +291,6 @@ const extractRoot = (row: any) => {
   }
 }
 
-// Show dialog
-const showDialog = (row?: any) => {
-  isEdit.value = !!row
-  if (row) {
-    Object.assign(formData, {
-      id: row.id,
-      code: row.code,
-      name: row.name,
-      format: row.format,
-      description: row.description || '',
-      tags: row.tags || '',
-      schemaData: row.schemaData || '',
-      sampleData: row.sampleData || ''
-    })
-  } else {
-    Object.assign(formData, {
-      id: null,
-      code: '',
-      name: '',
-      format: 'XML',
-      description: '',
-      tags: '',
-      schemaData: '',
-      sampleData: ''
-    })
-  }
-  dialogTab.value = 'basic'
-  dialogStructureTree.value = []
-  dialogVisible.value = true
-}
-
-// Submit
-const handleSubmit = async () => {
-  if (!formData.name || !formData.code) {
-    ElMessage.warning('请填写必填项')
-    return
-  }
-
-  // Auto generate schemaData from sampleData
-  if (formData.sampleData && !formData.schemaData) {
-    formData.schemaData = formData.sampleData
-  }
-
-  if (isEdit.value) {
-    await updateTemplate(formData)
-  } else {
-    await createTemplate(formData)
-  }
-  ElMessage.success('保存成功')
-  dialogVisible.value = false
-  loadData()
-}
-
 // Edit template
 const editTemplate = (row: any) => {
   router.push(`/template/${row.id}/edit`)
@@ -466,8 +309,7 @@ const viewStructure = async (row: any) => {
 
 // Copy template
 const copyTemplate = (row: any) => {
-  Object.assign(formData, {
-    id: null,
+  const copyData = {
     code: row.code + '_copy',
     name: row.name + '(副本)',
     format: row.format,
@@ -475,9 +317,9 @@ const copyTemplate = (row: any) => {
     tags: row.tags || '',
     schemaData: row.schemaData || '',
     sampleData: row.sampleData || ''
-  })
-  isEdit.value = false
-  dialogVisible.value = true
+  }
+  sessionStorage.setItem('templateCopyData', JSON.stringify(copyData))
+  router.push('/template/create')
 }
 
 // Delete

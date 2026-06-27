@@ -102,7 +102,7 @@ const targetTemplates = computed(() =>
 onMounted(async () => {
   allTemplates.value = (await getTemplateList() as any) || []
   if (route.params.id) {
-    const data: any = await getConverterById(Number(route.params.id))
+    const data: any = await getConverterById(route.params.id as string)
     Object.assign(formData, data)
   }
 })

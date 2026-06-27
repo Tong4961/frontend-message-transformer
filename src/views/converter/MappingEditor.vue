@@ -102,11 +102,16 @@
                 v-for="(rule, idx) in rules"
                 :key="idx"
                 class="mapping-node"
-                :class="{ active: selectedRuleIndex === idx }"
+                :class="{ active: selectedRuleIndex === idx, 'loop-node': rule.mappingType === 'LOOP' }"
                 @click="selectedRuleIndex = idx"
               >
                 <div class="node-source">{{ rule.sourceExpression || '(空)' }}</div>
-                <el-icon><Right /></el-icon>
+                <div class="node-arrow">
+                  <el-icon><Right /></el-icon>
+                  <el-tag v-if="rule.mappingType === 'LOOP'" type="warning" size="small" style="margin-top: 2px">
+                    {{ getLoopTypeLabel(rule.loopConfig) }}
+                  </el-tag>
+                </div>
                 <div class="node-target">{{ rule.targetExpression || '(空)' }}</div>
               </div>
               <div v-if="rules.length === 0" class="empty-canvas">
@@ -188,6 +193,14 @@
         </template>
         <el-table :data="rules" stripe border size="small" @row-click="onRowClick" highlight-current-row>
           <el-table-column type="index" label="#" width="50" />
+          <el-table-column label="类型" width="80" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.mappingType === 'LOOP'" type="warning" size="small">
+                {{ getLoopTypeLabel(row.loopConfig) }}
+              </el-tag>
+              <el-tag v-else type="info" size="small">直接</el-tag>
+            </template>
+          </el-table-column>
           <el-table-column label="源表达式" min-width="200">
             <template #default="{ row }">
               <el-input v-model="row.sourceExpression" size="small" placeholder="XPath/JsonPath" />
@@ -343,6 +356,44 @@
         <el-button type="primary" @click="applyVisualTarget">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- Loop Mapping Dialog -->
+    <el-dialog v-model="loopDialogVisible" title="配置循环映射" width="500px">
+      <el-form label-width="100px">
+        <el-form-item label="源节点">
+          <el-tag type="primary">{{ loopForm.sourcePath }}</el-tag>
+          <el-tag type="warning" size="small" style="margin-left: 8px">Array</el-tag>
+        </el-form-item>
+        <el-form-item label="目标节点">
+          <el-tag type="success">{{ loopForm.targetPath }}</el-tag>
+          <el-tag type="warning" size="small" style="margin-left: 8px">Array</el-tag>
+        </el-form-item>
+        <el-form-item label="映射方式">
+          <el-radio-group v-model="loopForm.loopType">
+            <el-radio label="LOOP">一对一循环</el-radio>
+            <el-radio label="AGGREGATE">聚合</el-radio>
+            <el-radio label="SPLIT">拆分</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="循环编码">
+          <el-input v-model="loopForm.loopCode" placeholder="如 providerLoop" />
+        </el-form-item>
+        <el-form-item label="父循环编码">
+          <el-input v-model="loopForm.parentLoopCode" placeholder="嵌套循环时填写父循环编码" />
+        </el-form-item>
+        <el-form-item>
+          <el-text type="info" size="small">
+            <template v-if="loopForm.loopType === 'LOOP'">逐个遍历源数组元素，映射到目标数组</template>
+            <template v-else-if="loopForm.loopType === 'AGGREGATE'">将源数组聚合为单个值（如逗号分隔）</template>
+            <template v-else>将单个值拆分到目标数组</template>
+          </el-text>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="loopDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="handleLoopDialogConfirm">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -353,15 +404,17 @@ import { ElMessage } from 'element-plus'
 import { getConverterById, updateConverter } from '@/api/converter'
 import { getRulesByConverter, saveRules } from '@/api/mappingRule'
 import { parseStructure } from '@/api/transform'
-import { getTemplateList, getTemplateById } from '@/api/template'
+import { getTemplateList, getTemplateById, getNodeConfigs } from '@/api/template'
 
 const router = useRouter()
 const route = useRoute()
-const converterId = Number(route.params.id)
+const converterId = route.params.id as string
 
 const converter = ref<any>(null)
 const sourceTree = ref<any[]>([])
 const targetTree = ref<any[]>([])
+const sourceNodeConfigs = ref<any[]>([])
+const targetNodeConfigs = ref<any[]>([])
 const rules = ref<any[]>([])
 const saving = ref(false)
 const zoom = ref(1)
@@ -382,6 +435,19 @@ const sourceTreeRef = ref()
 const targetTreeRef = ref()
 const canvasRef = ref()
 const canvasDragOver = ref(false)
+
+// Loop mapping
+const pendingSourceIsArray = ref(false)
+const loopDialogVisible = ref(false)
+const loopForm = reactive({
+  sourcePath: '',
+  targetPath: '',
+  sourceIsArray: false,
+  targetIsArray: false,
+  loopType: 'LOOP',
+  loopCode: '',
+  parentLoopCode: ''
+})
 
 // Template selection
 const allTemplates = ref<any[]>([])
@@ -548,6 +614,9 @@ const loadSourceFromTemplate = async (templateId: string | number) => {
         format: tpl.format
       }) as any
     }
+    // 加载循环配置
+    const configs = await getNodeConfigs(String(templateId)) as any
+    sourceNodeConfigs.value = configs || []
   } catch (e) { /* ignore */ }
 }
 
@@ -560,6 +629,9 @@ const loadTargetFromTemplate = async (templateId: string | number) => {
         format: tpl.format
       }) as any
     }
+    // 加载循环配置
+    const configs = await getNodeConfigs(String(templateId)) as any
+    targetNodeConfigs.value = configs || []
   } catch (e) { /* ignore */ }
 }
 
@@ -645,6 +717,7 @@ const applyVisualTarget = () => {
 const onSourceDragStart = (e: DragEvent, data: any) => {
   if (e.dataTransfer) {
     e.dataTransfer.setData('source-path', data.path)
+    e.dataTransfer.setData('source-array', String(!!data.array))
     e.dataTransfer.effectAllowed = 'copy'
   }
 }
@@ -653,6 +726,7 @@ const onCanvasDrop = (e: DragEvent) => {
   canvasDragOver.value = false
   if (!e.dataTransfer) return
   const sourcePath = e.dataTransfer.getData('source-path')
+  const sourceIsArray = e.dataTransfer.getData('source-array') === 'true'
   if (!sourcePath) return
   rules.value.push({
     sourceExpression: sourcePath,
@@ -663,9 +737,13 @@ const onCanvasDrop = (e: DragEvent) => {
     defaultValue: '',
     nullPolicy: 'SKIP',
     conditionExpression: '',
-    conditionValue: ''
+    conditionValue: '',
+    mappingType: 'DIRECT',
+    loopConfig: ''
   })
   selectedRuleIndex.value = rules.value.length - 1
+  // Store source array info for later detection when target is selected
+  pendingSourceIsArray.value = sourceIsArray
   ElMessage.success('已添加映射规则')
 }
 
@@ -677,12 +755,113 @@ const onSourceNodeClick = (data: any) => {
 
 const onTargetNodeClick = (data: any) => {
   if (selectedRuleIndex.value >= 0 && selectedRuleIndex.value < rules.value.length) {
-    rules.value[selectedRuleIndex.value].targetExpression = data.path
+    const rule = rules.value[selectedRuleIndex.value]
+    rule.targetExpression = data.path
+
+    // Check if this is an array-to-array mapping
+    const sourceNode = findNodeByPath(sourceTree.value, rule.sourceExpression)
+    if (sourceNode?.array && data.array) {
+      // Show loop mapping dialog
+      loopForm.sourcePath = rule.sourceExpression
+      loopForm.targetPath = data.path
+      loopForm.sourceIsArray = true
+      loopForm.targetIsArray = true
+      loopForm.loopType = 'LOOP'
+
+      // 从模板配置中获取循环编码
+      const targetConfig = targetNodeConfigs.value.find(c => c.nodePath === data.path && c.isLoop)
+      const sourceConfig = sourceNodeConfigs.value.find(c => c.nodePath === rule.sourceExpression && c.isLoop)
+      loopForm.loopCode = targetConfig?.loopCode || sourceConfig?.loopCode || ''
+      loopForm.parentLoopCode = targetConfig?.parentLoopCode || sourceConfig?.parentLoopCode || ''
+
+      loopDialogVisible.value = true
+    }
   }
 }
 
 const onRowClick = (row: any) => {
   selectedRuleIndex.value = rules.value.indexOf(row)
+}
+
+// Find node by path in tree
+const findNodeByPath = (tree: any[], path: string): any => {
+  for (const node of tree) {
+    if (node.path === path) return node
+    if (node.children) {
+      const found = findNodeByPath(node.children, path)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+// Loop mapping dialog
+const handleLoopDialogConfirm = () => {
+  if (selectedRuleIndex.value >= 0 && selectedRuleIndex.value < rules.value.length) {
+    const rule = rules.value[selectedRuleIndex.value]
+    rule.mappingType = 'LOOP'
+    rule.loopConfig = JSON.stringify({
+      loopType: loopForm.loopType,
+      loopCode: loopForm.loopCode,
+      parentLoopCode: loopForm.parentLoopCode
+    })
+
+    // Auto-create child rules for source array children
+    const sourceNode = findNodeByPath(sourceTree.value, loopForm.sourcePath)
+    const targetNode = findNodeByPath(targetTree.value, loopForm.targetPath)
+
+    if (sourceNode?.children?.length && targetNode?.children?.length) {
+      const srcChildren = sourceNode.children
+      const tgtChildren = targetNode.children
+
+      for (let i = 0; i < srcChildren.length; i++) {
+        const srcChild = srcChildren[i]
+        // Use actual tree path for source child
+        const srcPath = srcChild.path
+
+        // Try to match target by name first, then by index
+        let tgtChild = tgtChildren.find((t: any) => t.name === srcChild.name)
+        if (!tgtChild && i < tgtChildren.length) {
+          tgtChild = tgtChildren[i]
+        }
+
+        // Use actual tree path for target child
+        const tgtPath = tgtChild ? tgtChild.path : ''
+
+        // Check if this child rule already exists
+        const exists = rules.value.some((r: any) => r.sourceExpression === srcPath)
+
+        if (!exists) {
+          rules.value.push({
+            sourceExpression: srcPath,
+            targetExpression: tgtPath,
+            sourceType: srcChild.dataType || 'STRING',
+            targetType: tgtChild?.dataType || 'STRING',
+            converterChain: '',
+            defaultValue: '',
+            nullPolicy: 'SKIP',
+            conditionExpression: '',
+            conditionValue: '',
+            mappingType: 'DIRECT',
+            loopConfig: ''
+          })
+        }
+      }
+    }
+  }
+  loopDialogVisible.value = false
+  ElMessage.success('循环映射配置已保存，已自动生成子规则')
+}
+
+const getLoopTypeLabel = (loopConfig: string) => {
+  if (!loopConfig) return 'LOOP'
+  try {
+    const config = JSON.parse(loopConfig)
+    const labels: Record<string, string> = { LOOP: '循环', AGGREGATE: '聚合', SPLIT: '拆分' }
+    return labels[config.loopType] || 'LOOP'
+  } catch {
+    return 'LOOP'
+  }
 }
 
 // Extract simplified variable name from source expression
@@ -769,7 +948,9 @@ const handleAddRule = () => {
     defaultValue: '',
     nullPolicy: 'SKIP',
     conditionExpression: '',
-    conditionValue: ''
+    conditionValue: '',
+    mappingType: 'DIRECT',
+    loopConfig: ''
   })
   selectedRuleIndex.value = rules.value.length - 1
 }
@@ -787,8 +968,85 @@ const handleAutoMap = () => {
     return result
   }
 
+  // 去除中间路径段的 [*]，仅保留最后一段的 [*]（如果是数组节点）
+  const normalizeTargetPath = (path: string, isArray: boolean): string => {
+    const dotIdx = path.lastIndexOf('.')
+    if (dotIdx < 0) return path
+    const parent = path.substring(0, dotIdx).replace(/\[\*\]/g, '')
+    const last = path.substring(dotIdx + 1)
+    return parent + '.' + (isArray ? last : last.replace('[*]', ''))
+  }
+
+  // 从模板配置获取循环节点信息
+  const getNodeLoopConfig = (srcNode: any, tgtNode: any) => {
+    const tgtConfig = targetNodeConfigs.value.find((c: any) => c.nodePath === tgtNode.path && c.isLoop)
+    const srcConfig = sourceNodeConfigs.value.find((c: any) => c.nodePath === srcNode.path && c.isLoop)
+    if (!tgtConfig && !srcConfig) return null
+    return {
+      loopCode: tgtConfig?.loopCode || srcConfig?.loopCode || '',
+      parentLoopCode: tgtConfig?.parentLoopCode || srcConfig?.parentLoopCode || ''
+    }
+  }
+
+  // 递归创建子规则（支持多层嵌套循环）
+  const createChildRules = (srcNode: any, tgtNode: any, parentLoopCode: string, depth: number): number => {
+    if (depth > 5 || !srcNode.children?.length || !tgtNode.children?.length) return 0
+    let count = 0
+    for (const srcChild of srcNode.children) {
+      const tgtChild = tgtNode.children.find((t: any) => t.name === srcChild.name)
+        || tgtNode.children[srcNode.children.indexOf(srcChild)]
+      if (!tgtChild) continue
+      if (rules.value.find(r => r.sourceExpression === srcChild.path)) continue
+
+      // 检查是否为循环节点
+      const childLoopNodeConfig = getNodeLoopConfig(srcChild, tgtChild)
+      const isChildLoop = !!childLoopNodeConfig || (srcChild.array && tgtChild.array)
+      const childLoopCode = childLoopNodeConfig?.loopCode || ''
+      const childParentLoopCode = childLoopNodeConfig?.parentLoopCode || parentLoopCode
+
+      let childLoopConfig = ''
+      let conditionExpression = ''
+      if (isChildLoop) {
+        childLoopConfig = JSON.stringify({
+          loopType: 'LOOP',
+          loopCode: childLoopCode,
+          parentLoopCode: childParentLoopCode
+        })
+        conditionExpression = targetNodeConfigs.value.find(
+          (c: any) => c.nodePath === tgtChild.path && c.isLoop
+        )?.conditionExpression || ''
+      }
+
+      rules.value.push({
+        sourceExpression: srcChild.path,
+        targetExpression: normalizeTargetPath(tgtChild.path, tgtChild.array),
+        sourceType: srcChild.dataType || 'STRING',
+        targetType: tgtChild.dataType || 'STRING',
+        converterChain: '',
+        defaultValue: '',
+        nullPolicy: 'SKIP',
+        conditionExpression,
+        conditionValue: '',
+        mappingType: isChildLoop ? 'LOOP' : 'DIRECT',
+        loopConfig: childLoopConfig
+      })
+      count++
+
+      // 递归处理子循环的子节点
+      if (isChildLoop) {
+        count += createChildRules(srcChild, tgtChild, childLoopCode, depth + 1)
+      }
+    }
+    return count
+  }
+
   const sourceNodes = flatten(sourceTree.value)
   const targetNodes = flatten(targetTree.value)
+
+  // 获取模板配置的循环节点
+  const getLoopConfig = (path: string, configs: any[]) => {
+    return configs.find(c => c.nodePath === path && c.isLoop)
+  }
 
   let mapped = 0
   for (const target of targetNodes) {
@@ -798,6 +1056,23 @@ const handleAutoMap = () => {
     if (match) {
       const existing = rules.value.find(r => r.targetExpression === target.path)
       if (!existing) {
+        // 检查是否为循环节点：优先使用模板配置，否则根据 array 属性判断
+        const targetLoopConfig = getLoopConfig(target.path, targetNodeConfigs.value)
+        const sourceLoopConfig = getLoopConfig(match.path, sourceNodeConfigs.value)
+        const isLoop = targetLoopConfig || sourceLoopConfig || (match.array && target.array)
+
+        // 构建 loopConfig
+        let loopConfig = ''
+        if (isLoop) {
+          const loopCode = targetLoopConfig?.loopCode || sourceLoopConfig?.loopCode || ''
+          const parentLoopCode = targetLoopConfig?.parentLoopCode || sourceLoopConfig?.parentLoopCode || ''
+          loopConfig = JSON.stringify({
+            loopType: 'LOOP',
+            loopCode,
+            parentLoopCode
+          })
+        }
+
         rules.value.push({
           sourceExpression: match.path,
           targetExpression: target.path,
@@ -806,13 +1081,98 @@ const handleAutoMap = () => {
           converterChain: '',
           defaultValue: '',
           nullPolicy: 'SKIP',
-          conditionExpression: '',
-          conditionValue: ''
+          conditionExpression: targetLoopConfig?.conditionExpression || '',
+          conditionValue: '',
+          mappingType: isLoop ? 'LOOP' : 'DIRECT',
+          loopConfig
         })
         mapped++
+
+        // If this is a loop mapping, also auto-create child rules (recursive)
+        if (isLoop) {
+          const currentLoopCode = targetLoopConfig?.loopCode || sourceLoopConfig?.loopCode || ''
+          mapped += createChildRules(match, target, currentLoopCode, 0)
+        }
       }
     }
   }
+
+  // Post-processing: ensure LOOP rules exist for all array targets
+  const arrayPrefixes = new Set<string>()
+  for (const rule of rules.value) {
+    const tgt = rule.targetExpression
+    if (!tgt || rule.mappingType === 'LOOP') continue
+    const m = tgt.match(/^(.*?\[\*\])/)
+    if (m) arrayPrefixes.add(m[1])
+  }
+
+  for (const arrayPrefix of arrayPrefixes) {
+    const hasLoop = rules.value.some(r =>
+      r.mappingType === 'LOOP' && r.targetExpression &&
+      (r.targetExpression === arrayPrefix ||
+       r.targetExpression === arrayPrefix.replace(/\[\*\]/g, '') ||
+       arrayPrefix.startsWith(r.targetExpression.replace(/\[\*\]/g, '')))
+    )
+    if (hasLoop) continue
+
+    const normalizedArray = arrayPrefix.replace(/\[\*\]/g, '')
+    const arrayName = normalizedArray.split('.').pop() || ''
+
+    // Find source node matching the array name
+    const srcMatch = sourceNodes.find(s => {
+      const srcName = s.name.toLowerCase()
+      return srcName === arrayName.toLowerCase() ||
+             srcName === arrayName.toLowerCase().replace(/s$/, '') ||
+             srcName === arrayName.toLowerCase() + 's'
+    })
+    if (!srcMatch) continue
+
+    // Check template config
+    const loopCfg = targetNodeConfigs.value.find(
+      (c: any) => c.isLoop && (
+        c.nodePath === arrayPrefix ||
+        c.nodePath === normalizedArray ||
+        c.nodePath === arrayPrefix.replace(/\[\*\]/, '')
+      )
+    ) || sourceNodeConfigs.value.find(
+      (c: any) => c.isLoop && (
+        c.nodePath === srcMatch.path ||
+        c.nodePath === srcMatch.path.replace(/\[\*\]/g, '')
+      )
+    )
+
+    const loopCode = loopCfg?.loopCode || arrayName + 'Loop'
+    const parentLoopCode = loopCfg?.parentLoopCode || ''
+    const conditionExpression = loopCfg?.conditionExpression || ''
+
+    rules.value.push({
+      sourceExpression: srcMatch.path,
+      targetExpression: normalizedArray,
+      sourceType: srcMatch.dataType || 'STRING',
+      targetType: 'ARRAY',
+      converterChain: '',
+      defaultValue: '',
+      nullPolicy: 'SKIP',
+      conditionExpression,
+      conditionValue: '',
+      mappingType: 'LOOP',
+      loopConfig: JSON.stringify({
+        loopType: 'LOOP',
+        loopCode,
+        parentLoopCode
+      })
+    })
+    mapped++
+
+    // Create child rules using actual tree nodes
+    const srcTreeNode = findNodeByPath(sourceTree.value, srcMatch.path)
+    const tgtTreeNode = findNodeByPath(targetTree.value, normalizedArray) ||
+                        findNodeByPath(targetTree.value, arrayPrefix)
+    if (srcTreeNode && tgtTreeNode) {
+      mapped += createChildRules(srcTreeNode, tgtTreeNode, loopCode, 0)
+    }
+  }
+
   ElMessage.success(`自动映射完成，新增 ${mapped} 条规则`)
 }
 
@@ -951,6 +1311,24 @@ const zoomReset = () => { zoom.value = 1 }
 .mapping-node.active {
   border-color: #409eff;
   background: #ecf5ff;
+}
+
+.mapping-node.loop-node {
+  border-color: #e6a23c;
+  background: #fdf6ec;
+}
+
+.mapping-node.loop-node.active {
+  border-color: #e6a23c;
+  background: #faecd8;
+}
+
+.node-arrow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px;
 }
 
 .node-source {

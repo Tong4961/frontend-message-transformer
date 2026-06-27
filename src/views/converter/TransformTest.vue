@@ -9,7 +9,6 @@
             <el-button type="primary" @click="executeTest" :loading="testing">
               <el-icon><VideoPlay /></el-icon>执行测试
             </el-button>
-            <el-button @click="formatInput">格式化输入</el-button>
           </div>
         </div>
       </template>
@@ -19,14 +18,20 @@
         <div class="test-panel">
           <div class="panel-title">
             输入 ({{ converter?.sourceFormat }})
-            <el-button size="small" @click="loadSample">加载示例</el-button>
+            <div>
+              <el-button size="small" @click="loadSample">加载示例</el-button>
+              <el-button size="small" @click="formatInput">格式化</el-button>
+            </div>
           </div>
           <div class="editor-container" ref="inputEditorRef"></div>
         </div>
 
         <!-- Output -->
         <div class="test-panel">
-          <div class="panel-title">输出 ({{ converter?.targetFormat }})</div>
+          <div class="panel-title">
+            输出 ({{ converter?.targetFormat }})
+            <el-button size="small" @click="formatOutput">格式化</el-button>
+          </div>
           <div class="editor-container" ref="outputEditorRef"></div>
         </div>
       </div>
@@ -66,11 +71,12 @@ import { getTemplateById } from '@/api/template'
 
 const router = useRouter()
 const route = useRoute()
-const converterId = Number(route.params.id)
+const converterId = route.params.id as string
 
 const converter = ref<any>(null)
 const testing = ref(false)
 const result = ref<any>(null)
+const templateSampleData = ref('')
 
 const inputEditorRef = ref<HTMLElement>()
 const outputEditorRef = ref<HTMLElement>()
@@ -85,7 +91,10 @@ onMounted(async () => {
   if (converter.value?.sourceTemplateId) {
     try {
       const tpl: any = await getTemplateById(converter.value.sourceTemplateId)
-      if (tpl?.sampleData) defaultInput = tpl.sampleData
+      if (tpl?.sampleData) {
+        defaultInput = tpl.sampleData
+        templateSampleData.value = tpl.sampleData
+      }
     } catch (e) { /* ignore */ }
   }
 
@@ -125,23 +134,73 @@ onBeforeUnmount(() => {
 })
 
 const loadSample = () => {
-  if (inputEditor && converter.value?.sourceSample) {
-    inputEditor.setValue(converter.value.sourceSample)
+  if (!inputEditor) return
+  const sample = templateSampleData.value || converter.value?.sourceSample
+  if (sample) {
+    inputEditor.setValue(sample)
+  } else {
+    ElMessage.warning('无示例数据')
   }
 }
 
-const formatInput = () => {
-  if (!inputEditor) return
-  const value = inputEditor.getValue()
-  try {
-    if (converter.value?.sourceFormat === 'JSON') {
-      inputEditor.setValue(JSON.stringify(JSON.parse(value), null, 2))
+const formatXml = (xml: string): string => {
+  const trimmed = xml.trim()
+  const declMatch = trimmed.match(/^<\?xml\s[^?]*\?>/i)
+  const decl = declMatch ? declMatch[0] : ''
+
+  const parser = new DOMParser()
+  const doc = parser.parseFromString(trimmed, 'text/xml')
+
+  const formatNode = (node: Node, indent: number): string => {
+    const pad = '  '.repeat(indent)
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent?.trim()
+      return text || ''
     }
-    // XML formatting would need a library
+    if (node.nodeType !== Node.ELEMENT_NODE) return ''
+    const el = node as Element
+    const tag = el.tagName
+    const attrs = Array.from(el.attributes).map(a => ` ${a.name}="${a.value}"`).join('')
+    const children = Array.from(el.childNodes).map(c => formatNode(c, indent + 1)).filter(Boolean)
+    if (children.length === 0) {
+      return `${pad}<${tag}${attrs}/>`
+    }
+    // Always use multi-line format for elements with child elements
+    const hasElementChild = Array.from(el.childNodes).some(c => c.nodeType === Node.ELEMENT_NODE)
+    if (!hasElementChild && children.length === 1 && children[0].length < 80) {
+      // Single text content, can be on same line
+      return `${pad}<${tag}${attrs}>${children[0]}</${tag}>`
+    }
+    const inner = children.map(c => {
+      if (c.startsWith('  ') || c.startsWith('<')) return c
+      return '  '.repeat(indent + 1) + c
+    }).join('\n')
+    return `${pad}<${tag}${attrs}>\n${inner}\n${pad}</${tag}>`
+  }
+
+  const elements = Array.from(doc.childNodes)
+    .filter(n => n.nodeType === Node.ELEMENT_NODE)
+    .map(n => formatNode(n, 0))
+
+  return (decl ? decl + '\n' : '') + elements.join('\n')
+}
+
+const formatEditor = (editor: monaco.editor.IStandaloneCodeEditor | null, format: string) => {
+  if (!editor) return
+  const value = editor.getValue()
+  try {
+    if (format === 'JSON') {
+      editor.setValue(JSON.stringify(JSON.parse(value), null, 2))
+    } else if (format === 'XML' || format === 'HL7_V3') {
+      editor.setValue(formatXml(value))
+    }
   } catch (e) {
     ElMessage.warning('格式化失败，请检查语法')
   }
 }
+
+const formatInput = () => formatEditor(inputEditor, converter.value?.sourceFormat || 'JSON')
+const formatOutput = () => formatEditor(outputEditor, converter.value?.targetFormat || 'JSON')
 
 const executeTest = async () => {
   if (!inputEditor) return

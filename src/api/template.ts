@@ -44,3 +44,21 @@ export function getSearchFields(templateId: string) {
 export function saveSearchFields(templateId: string, fields: any[]) {
   return request.post('/template-search-field/save', { templateId, fields })
 }
+
+// 节点循环配置
+export function getNodeConfigs(templateId: string) {
+  return request.get('/template-node-config/list', { params: { templateId } })
+}
+
+export function saveNodeConfigs(templateId: string, configs: any[]) {
+  return request.post('/template-node-config/save', { templateId, configs })
+}
+
+// 节点约束配置
+export function getNodeConstraints(templateId: string) {
+  return request.get('/template-node-constraint/list', { params: { templateId } })
+}
+
+export function saveNodeConstraints(templateId: string, constraints: any[]) {
+  return request.post('/template-node-constraint/save', { templateId, constraints })
+}
