@@ -190,7 +190,6 @@
                       <el-option label="Date" value="Date" />
                       <el-option label="Time" value="Time" />
                       <el-option label="DateTime" value="DateTime" />
-                      <el-option label="DT15" value="DT15" />
                     </el-select>
                   </el-form-item>
                   <el-form-item label="是否必填">
@@ -244,13 +243,6 @@
                     </el-form-item>
                   </template>
 
-                  <!-- DT15 Format -->
-                  <template v-if="constraintForm.dataType === 'DT15'">
-                    <el-form-item label="格式说明">
-                      <el-tag type="info">yyyyMMddHHmmss（如 20260622143025）</el-tag>
-                    </el-form-item>
-                  </template>
-
                   <!-- Enum Config -->
                   <template v-if="constraintForm.dataType === 'Enum'">
                     <el-form-item label="枚举值">
@@ -299,6 +291,11 @@
           </el-card>
         </div>
       </el-tab-pane>
+
+      <!-- Tab 4: Message Validation -->
+      <el-tab-pane label="消息验证" name="validate" v-if="!isCreate">
+        <MessageValidate v-if="activeTab === 'validate' && templateId" :template-id="templateId" />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -310,6 +307,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowLeft, Check, Refresh } from '@element-plus/icons-vue'
 import { getTemplateById, createTemplate, updateTemplate, getSearchFields, saveSearchFields, getNodeConfigs, saveNodeConfigs, getNodeConstraints, saveNodeConstraints } from '@/api/template'
 import { parseStructure } from '@/api/transform'
+import MessageValidate from './MessageValidate.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -729,7 +727,6 @@ const getSampleValue = (): string => {
       if (fp === "yyyy-MM-dd'T'HH:mm:ss") return "2026-06-22T14:30:25"
       return '2026-06-22 14:30:25'
     }
-    case 'DT15': return '20260622143025'
     case 'Number': return '30'
     case 'Enum': {
       if (constraintForm.enumConfig.length > 0) return constraintForm.enumConfig[0].value

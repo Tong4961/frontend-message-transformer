@@ -62,3 +62,8 @@ export function getNodeConstraints(templateId: string) {
 export function saveNodeConstraints(templateId: string, constraints: any[]) {
   return request.post('/template-node-constraint/save', { templateId, constraints })
 }
+
+// 消息验证
+export function validateMessage(data: { templateId: string; messageType: string; content: string }) {
+  return request.post('/template/validate', data)
+}
