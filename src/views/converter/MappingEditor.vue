@@ -617,6 +617,8 @@ const loadSourceFromTemplate = async (templateId: string | number) => {
     // 加载循环配置
     const configs = await getNodeConfigs(String(templateId)) as any
     sourceNodeConfigs.value = configs || []
+    // 将模板循环配置合并到源树，确保 isLoop 节点显示 array 标识
+    mergeLoopConfigToTree(sourceTree.value, sourceNodeConfigs.value)
   } catch (e) { /* ignore */ }
 }
 
@@ -632,6 +634,8 @@ const loadTargetFromTemplate = async (templateId: string | number) => {
     // 加载循环配置
     const configs = await getNodeConfigs(String(templateId)) as any
     targetNodeConfigs.value = configs || []
+    // 将模板循环配置合并到目标树，确保 isLoop 节点显示 array 标识
+    mergeLoopConfigToTree(targetTree.value, targetNodeConfigs.value)
   } catch (e) { /* ignore */ }
 }
 
@@ -793,6 +797,29 @@ const findNodeByPath = (tree: any[], path: string): any => {
     }
   }
   return null
+}
+
+// 将模板节点的 isLoop 配置合并到树节点，使 array 标识正确显示
+const mergeLoopConfigToTree = (treeNodes: any[], nodeConfigs: any[]) => {
+  if (!treeNodes || !nodeConfigs) return
+  const configMap = new Map<string, any>()
+  for (const config of nodeConfigs) {
+    if (config.isLoop) {
+      configMap.set(config.nodePath, config)
+    }
+  }
+  const walk = (nodes: any[]) => {
+    for (const node of nodes) {
+      const config = configMap.get(node.path)
+      if (config?.isLoop) {
+        node.array = true
+      }
+      if (node.children && node.children.length > 0) {
+        walk(node.children)
+      }
+    }
+  }
+  walk(treeNodes)
 }
 
 // Loop mapping dialog
